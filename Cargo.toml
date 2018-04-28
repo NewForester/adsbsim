@@ -1,0 +1,10 @@
+[package]
+name = "adsbsim"
+version = "0.1.0"
+authors = ["NewForester <NewForester@users.noreply.github.com>"]
+
+[dependencies]
+byteorder = "1.2.2"
+crc16 = "0.3.4"
+chrono = "0.4"
+
