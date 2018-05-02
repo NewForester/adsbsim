@@ -4,6 +4,8 @@
 //
 extern crate mosquitto_client;
 
+use std::sync::mpsc;
+
 // ---------------------------------------------------------------------
 
 /*
@@ -109,8 +111,8 @@ impl Client {
         self
     }
 
-    pub fn subscribe<F>(&mut self, callback: F) -> &mut Self
-                where F: Fn(&[u8]) -> () {
+    pub fn subscribe<F>(&mut self, channel: &mpsc::Sender<Vec<u8>>, callback: F) -> &mut Self
+                where F: Fn(&mpsc::Sender<Vec<u8>>, &[u8]) -> () {
         match self.handle.subscribe(&self.subtopic, 1) {
             Ok(_)  => println!("MQTT subscribe successful"),
             Err(e) => println!("MQTT subscribe error: {}", e),
@@ -121,7 +123,7 @@ impl Client {
 
             mc.on_message(move |data, msg| {
                 *data += 1;
-                callback(msg.payload());
+                callback(channel, msg.payload());
             });
 
             match self.handle.loop_until_disconnect(200) {

@@ -10,6 +10,8 @@ pub mod msg203;
 pub mod msg202;
 pub mod msg246;
 
+pub mod msg84;
+
 use std::io::Error;
 
 use self::byteorder::{LittleEndian, WriteBytesExt};
@@ -90,7 +92,6 @@ pub trait Message {
         buffy.push(header.compid);
         buffy.push(header.msgid);
 
-//        unsafe {SEQNO_OUT += 1;}
         unsafe {SEQNO_OUT = SEQNO_OUT.wrapping_add(1);}
 
         Ok(())

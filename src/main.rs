@@ -6,6 +6,7 @@ use std::env;
 use std::{thread, time};
 use std::net::UdpSocket;
 use std::io::{Error, ErrorKind};
+use std::sync::mpsc;
 
 mod coords;
 use coords::CwithV;
@@ -27,6 +28,8 @@ fn main () -> () {
         }
     }
 
+    let (sender, receiver) = mpsc::channel();
+
 //    mqtt.dump();
     mqtt.connect();
 
@@ -35,16 +38,17 @@ fn main () -> () {
     thread::spawn(move || {
         if mqttpub.pubtopic.len() != 0 {
             println!("Producer {}", mqttpub.pubtopic);
-            producer(&mut mqttpub);
+            producer(&receiver, &mut mqttpub);
         }
         else {
             println!("Socket");
-            inet_producer();
+            inet_producer(&receiver);
         }
     });
 
 /*
     // no, it seems the mosquitto wrapper is not as thread safe as claimed
+
     let mut mqttsub = mqtt.clone();
 
     thread::spawn(move || {
@@ -53,18 +57,20 @@ fn main () -> () {
     });
 */
     println!("Consumer {}", mqtt.subtopic);
-    mqtt.subscribe(snake_case);
+    mqtt.subscribe(&sender, snake_case);
 
     mqtt.disconnect();
 
     println!("Goodbye cruel, world!");
 }
 
-fn snake_case(mavmsg: &[u8]) -> () {
-    println!("received message {} ({})", mavmsg[5], mavmsg[2]);
+fn snake_case(channel: &mpsc::Sender<Vec<u8>>, mavmsg: &[u8]) -> () {
+    let v = Vec::from(mavmsg);
+
+    channel.send(v).unwrap();
 }
 
-fn producer(mqtt: &mut mqtt::Client) -> () {
+fn producer(channel: &mpsc::Receiver<Vec<u8>>, mqtt: &mut mqtt::Client) -> () {
     let mut uav = CwithV::new();
     let mut ufo = CwithV::new();
 
@@ -107,6 +113,8 @@ fn producer(mqtt: &mut mqtt::Client) -> () {
 
     trafficreport.icao = 0x00300100;
 
+    let uav_orig = uav.clone();
+
     loop {
         let start = time::Instant::now();
 
@@ -135,6 +143,27 @@ fn producer(mqtt: &mut mqtt::Client) -> () {
 //            }
         }
 
+        let mut lre = CwithV::new();
+        let mut avoid = false;
+
+        for mut mavmsg in channel.try_iter() {
+            println!("received message {} ({})", mavmsg[5], mavmsg[2]);
+
+            let mut settargetposition   = mavlink::msg84::Message::new();
+
+            settargetposition.unpack_payload(&mavmsg).unwrap(); // tut tut
+
+            lre.velocity(settargetposition.vx, settargetposition.vy, settargetposition.vz);
+            avoid = true;
+        }
+
+        if avoid {
+            uav.course(&lre);
+        }
+        else {
+            uav.course(&uav_orig);
+        }
+
         uav.update();
         ufo.update();
 
@@ -144,7 +173,7 @@ fn producer(mqtt: &mut mqtt::Client) -> () {
     }
 }
 
-fn inet_producer() -> () {
+fn inet_producer(_channel: &mpsc::Receiver<Vec<u8>>) -> () {
     let mut uav = CwithV::new();
     let mut ufo = CwithV::new();
 

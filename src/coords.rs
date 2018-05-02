@@ -12,6 +12,7 @@ use std::f32;
  * Position and velocity of a UAV or UFO
  */
 
+ #[derive(Clone)]
 pub struct CwithV {
     latitude:       f32,
     longitude:      f32,
@@ -99,6 +100,22 @@ impl CwithV {
         self.latitude  += self.ns_velocity;
         self.longitude += self.ew_velocity;
         self.altitude  += self.ud_velocity;
+
+        self
+    }
+
+    pub fn velocity(&mut self, vx: f32, vy: f32, vz: f32) -> &mut Self {
+        self.ns_velocity = vx;
+        self.ew_velocity = vy;
+        self.ud_velocity = vz;
+
+        self
+    }
+
+    pub fn course(&mut self, new: &CwithV) -> &mut Self {
+        self.ns_velocity = new.ns_velocity;
+        self.ew_velocity = new.ew_velocity;
+        self.ud_velocity = new.ud_velocity;
 
         self
     }
