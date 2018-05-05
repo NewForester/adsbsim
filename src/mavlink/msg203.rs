@@ -2,7 +2,7 @@
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 
 use mavlink;
 use mavlink::byteorder::{WriteBytesExt};
@@ -30,8 +30,8 @@ impl Message {
 
 impl mavlink::Message for Message {
     const MSGID: u8 = 203;
-    const PAYLEN: u8 = 1;
     const EXTRA: u8 = 0x55;
+    const PAYLEN: usize = 1;
 
     fn serialise(&mut self) -> &mut Self {
         self.buffy = Self::serialise_message(self);
@@ -53,6 +53,10 @@ impl mavlink::Message for Message {
         buffy.write_u8(self.status)?;
 
         Ok(())
+    }
+
+    fn unpack_payload(&mut self, mut _payload: &[u8]) -> Result<(),Error> {
+        Err(Error::new(ErrorKind::Other, "Not implemented"))
     }
 }
 

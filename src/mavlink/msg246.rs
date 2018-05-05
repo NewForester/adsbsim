@@ -2,7 +2,7 @@
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
-use std::io::{Write, Error};
+use std::io::{Write, Error, ErrorKind};
 
 use ::coords::CwithV;
 
@@ -66,12 +66,12 @@ impl Message {
             tslc:           1,
         };
 
-        safe.setcallsign("D-RisQ");
+        safe.set_callsign("D-RisQ");
 
         safe
     }
 
-    pub fn setcallsign(&mut self, callsign: &str) -> &mut Self {
+    pub fn set_callsign(&mut self, callsign: &str) -> &mut Self {
         let safe = String::from(callsign).into_bytes();
 
         for ii in 0 .. safe.len() {
@@ -93,7 +93,7 @@ impl Message {
         self
     }
 
-    pub fn set_alt(&mut self, altitude: f32) -> &mut Self {
+    pub fn set_altitude(&mut self, altitude: f32) -> &mut Self {
         self.altitude = (altitude * 1.0e3) as i32;
         self.validflags |= VF::AltitudeValid as u16;
 
@@ -123,13 +123,13 @@ impl Message {
     pub fn set_candv(&mut self, candv: &CwithV) -> &mut Self {
         self.validflags &= VF::CallsignValid as u16;
 
-        self.set_gps(candv.latitude(), candv.longitude());
+        self.set_gps(candv.get_latitude(), candv.get_longitude());
 
-        self.set_alt(candv.altitude());
-        self.set_rateofclimb(candv.rateofclimb());
+        self.set_altitude(candv.get_altitude());
+        self.set_rateofclimb(candv.get_rateofclimb());
 
-        self.set_heading(candv.heading());
-        self.set_groundspeed(candv.groundspeed());
+        self.set_heading(candv.get_heading());
+        self.set_groundspeed(candv.get_groundspeed());
 
         self
     }
@@ -137,8 +137,8 @@ impl Message {
 
 impl mavlink::Message for Message {
     const MSGID: u8 = 246;
-    const PAYLEN: u8 = 38;
     const EXTRA: u8 = 0xb8;
+    const PAYLEN: usize = 38;
 
     fn serialise(&mut self) -> &mut Self {
         self.buffy = Self::serialise_message(self);
@@ -158,20 +158,28 @@ impl mavlink::Message for Message {
 
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         buffy.write_u32::<LittleEndian>(self.icao)?;
+
         buffy.write_i32::<LittleEndian>(self.lat)?;
         buffy.write_i32::<LittleEndian>(self.lon)?;
         buffy.write_i32::<LittleEndian>(self.altitude)?;
+
         buffy.write_i16::<LittleEndian>(self.heading)?;
         buffy.write_u16::<LittleEndian>(self.horvelocity)?;
         buffy.write_i16::<LittleEndian>(self.vervelocity)?;
+
         buffy.write_u16::<LittleEndian>(self.validflags)?;
         buffy.write_u16::<LittleEndian>(self.squawk)?;
+
         buffy.write_u8(self.altitudetype)?;
         buffy.write(&self.callsign)?;
         buffy.write_u8(self.emittertype)?;
         buffy.write_u8(self.tslc)?;
 
         Ok(())
+    }
+
+    fn unpack_payload(&mut self, mut _payload: &[u8]) -> Result<(),Error> {
+       Err(Error::new(ErrorKind::Other, "Not implemented"))
     }
 }
 

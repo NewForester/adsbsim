@@ -6,12 +6,12 @@ extern crate chrono;
 
 use self::chrono::Utc;
 
-use std::io::Error;
+use std::io::{Error};
 
 use ::coords::CwithV;
 
 use mavlink;
-use mavlink::byteorder::{LittleEndian, WriteBytesExt};
+use mavlink::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 // ---------------------------------------------------------------------
 
@@ -66,46 +66,74 @@ impl Message {
         }
     }
 
-    pub fn set_lat(&mut self, latitude: f32) -> &mut Self {
+    pub fn set_latitude(&mut self, latitude: f32) -> &mut Self {
         self.latitude = (latitude * 1.0e7) as i32;
 
         self
     }
-    pub fn set_long(&mut self, longitude: f32) -> &mut Self {
+    pub fn set_longitude(&mut self, longitude: f32) -> &mut Self {
         self.longitude = (longitude * 1.0e7) as i32;
 
         self
     }
-    pub fn set_alt(&mut self, altitude: f32) -> &mut Self {
+    pub fn set_altitude(&mut self, altitude: f32) -> &mut Self {
         self.altpres = (altitude * 1.0e3) as i32;
 
         self
     }
 
-    pub fn set_udvelocity(&mut self, updown_velocity: f32) -> &mut Self {
+    pub fn set_rateofclimb(&mut self, updown_velocity: f32) -> &mut Self {
         self.velvert = (updown_velocity * 1.0e2) as i16;
 
         self
     }
-    pub fn set_nsvelocity(&mut self, northsouth_velocity: f32) -> &mut Self {
+    pub fn set_ns_velocity(&mut self, northsouth_velocity: f32) -> &mut Self {
         self.nsvog = (northsouth_velocity * 1.0e2) as i16;
 
         self
     }
-    pub fn set_ewvelocity(&mut self, eastwest_velocity: f32) -> &mut Self {
+    pub fn set_ew_velocity(&mut self, eastwest_velocity: f32) -> &mut Self {
         self.ewvog = (eastwest_velocity * 1.0e2) as i16;
 
         self
     }
 
     pub fn set_candv(&mut self, candv: &CwithV) -> &mut Self {
-        self.set_lat(candv.latitude());
-        self.set_long(candv.longitude());
-        self.set_alt(candv.altitude());
+        self.set_latitude(candv.get_latitude());
+        self.set_longitude(candv.get_longitude());
+        self.set_altitude(candv.get_altitude());
 
-        self.set_udvelocity(candv.rateofclimb());
-        self.set_nsvelocity(candv.ns_velocity());
-        self.set_ewvelocity(candv.ew_velocity());
+        self.set_ns_velocity(candv.get_ns_velocity());
+        self.set_ew_velocity(candv.get_ew_velocity());
+        self.set_rateofclimb(candv.get_rateofclimb());
+
+        self
+    }
+
+    pub fn get_latitude(&mut self) -> f32 {
+        self.latitude as f32 / 1.0e7
+    }
+    pub fn get_longitude(&mut self) -> f32 {
+        self.longitude as f32 / 1.0e7
+    }
+    pub fn get_altitude(&mut self) -> f32 {
+        self.altpres as f32 / 1.0e3
+    }
+
+    pub fn get_rateofclimb(&mut self) -> f32 {
+        self.velvert as f32 / 1.0e2
+    }
+    pub fn get_ns_velocity(&mut self) -> f32 {
+        self.nsvog as f32 / 1.0e2
+    }
+    pub fn get_ew_velocity(&mut self) -> f32 {
+        self.ewvog as f32 / 1.0e2
+    }
+
+    pub fn get_candv(&mut self, candv: &mut CwithV) -> &mut Self {
+        candv.set_position(self.get_latitude(), self.get_longitude(), self.get_altitude());
+
+        candv.set_velocity(self.get_ns_velocity(), self.get_ew_velocity(), self.get_rateofclimb());
 
         self
     }
@@ -113,8 +141,8 @@ impl Message {
 
 impl mavlink::Message for Message {
     const MSGID: u8 = 202;
-    const PAYLEN: u8 = 42;
     const EXTRA: u8 = 0x07;
+    const PAYLEN: usize = 42;
 
     fn serialise(&mut self) -> &mut Self {
         self.utctime = Utc::now().timestamp() as u32;
@@ -136,22 +164,52 @@ impl mavlink::Message for Message {
 
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         buffy.write_u32::<LittleEndian>(self.utctime)?;
+
         buffy.write_i32::<LittleEndian>(self.latitude)?;
         buffy.write_i32::<LittleEndian>(self.longitude)?;
         buffy.write_i32::<LittleEndian>(self.altpres)?;
         buffy.write_i32::<LittleEndian>(self.altgnss)?;
+
         buffy.write_u32::<LittleEndian>(self.acchoriz)?;
         buffy.write_u16::<LittleEndian>(self.accvert)?;
         buffy.write_u16::<LittleEndian>(self.accvel)?;
+
         buffy.write_i16::<LittleEndian>(self.velvert)?;
         buffy.write_i16::<LittleEndian>(self.nsvog)?;
         buffy.write_i16::<LittleEndian>(self.ewvog)?;
+
         buffy.write_u16::<LittleEndian>(self.state)?;
         buffy.write_u16::<LittleEndian>(self.squawk)?;
         buffy.write_u8(self.fixtype)?;
         buffy.write_u8(self.numsats)?;
         buffy.write_u8(self.emstatus)?;
         buffy.write_u8(self.control)?;
+
+        Ok(())
+    }
+
+    fn unpack_payload(&mut self, mut payload: &[u8]) -> Result<(),Error> {
+        self.utctime = payload.read_u32::<LittleEndian>()?;
+
+        self.latitude = payload.read_i32::<LittleEndian>()?;
+        self.longitude = payload.read_i32::<LittleEndian>()?;
+        self.altpres = payload.read_i32::<LittleEndian>()?;
+        self.altgnss = payload.read_i32::<LittleEndian>()?;
+
+        self.acchoriz = payload.read_u32::<LittleEndian>()?;
+        self.accvert = payload.read_u16::<LittleEndian>()?;
+        self.accvel = payload.read_u16::<LittleEndian>()?;
+
+        self.velvert = payload.read_i16::<LittleEndian>()?;
+        self.nsvog = payload.read_i16::<LittleEndian>()?;
+        self.ewvog = payload.read_i16::<LittleEndian>()?;
+
+        self.state = payload.read_u16::<LittleEndian>()?;
+        self.squawk = payload.read_u16::<LittleEndian>()?;
+        self.fixtype = payload.read_u8()?;
+        self.numsats = payload.read_u8()?;
+        self.emstatus = payload.read_u8()?;
+        self.control = payload.read_u8()?;
 
         Ok(())
     }

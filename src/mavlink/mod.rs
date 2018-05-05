@@ -6,17 +6,18 @@ extern crate byteorder;
 extern crate crc16;
 
 pub mod msg66;
-pub mod msg203;
-pub mod msg202;
-pub mod msg246;
-
 pub mod msg84;
+pub mod msg202;
+pub mod msg203;
+pub mod msg246;
 
 use std::io::Error;
 
 use self::byteorder::{LittleEndian, WriteBytesExt};
 
 static mut SEQNO_OUT: u8 = 0;
+
+const SHUTUP: usize = 256;
 
 struct Header {
     pub mavstx:     u8,
@@ -29,8 +30,8 @@ struct Header {
 
 pub trait Message {
     const MSGID: u8;
-    const PAYLEN: u8;
     const EXTRA: u8;
+    const PAYLEN: usize;
 
     fn serialise(&mut self) -> &mut Self;
 
@@ -63,6 +64,25 @@ pub trait Message {
         buffy
     }
 
+    fn deserialise_message(&mut self, buffy: &Vec<u8>) -> &mut Self {
+        let mut known_size: [u8; SHUTUP] = [0; SHUTUP];
+
+        for ii in 0 .. Self::PAYLEN {
+            known_size[ii] = buffy[6 + ii];
+        }
+
+        match self.unpack_payload(&known_size[ .. ]) {
+            Ok(_)  => {
+                ();
+            }
+            Err(_) => {
+                println!("Deserialisation of message {} failed", Self::MSGID);
+            }
+        }
+
+        self
+    }
+
     fn pack_message(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         Self::pack_header(buffy)?;
 
@@ -76,7 +96,7 @@ pub trait Message {
     fn pack_header(buffy: &mut Vec<u8>) -> Result<(),Error> {
         let mut header = Header {
             mavstx:     0xfe,
-            paylen:     Self::PAYLEN,
+            paylen:     Self::PAYLEN as u8,
             seqno:      0,
             sysid:      0x19,
             compid:     0x59,
@@ -109,6 +129,8 @@ pub trait Message {
 
         Ok(())
     }
+
+    fn unpack_payload(&mut self, payload: &[u8]) -> Result<(),Error>;
 }
 
 // EOF
