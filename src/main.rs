@@ -5,7 +5,6 @@
 use std::env;
 use std::{thread, time};
 use std::net::UdpSocket;
-use std::io::{Error, ErrorKind};
 use std::sync::mpsc;
 
 mod coords;
@@ -36,14 +35,7 @@ fn main () -> () {
     let mut mqttpub = mqtt.clone();
 
     thread::spawn(move || {
-        if mqttpub.pubtopic.len() != 0 {
-            println!("Producer {}", mqttpub.pubtopic);
-            producer(&receiver, &mut mqttpub);
-        }
-        else {
-            println!("Socket");
-            inet_producer(&receiver);
-        }
+        producer(&receiver, &mut mqttpub);
     });
 
 /*
@@ -71,109 +63,8 @@ fn snake_case(channel: &mpsc::Sender<Vec<u8>>, mavmsg: &[u8]) -> () {
 }
 
 fn producer(channel: &mpsc::Receiver<Vec<u8>>, mqtt: &mut mqtt::Client) -> () {
-    let mut uav = CwithV::new();
-    let mut ufo = CwithV::new();
+    let mut inet: Option<UdpSocket> = None;
 
-//    let mut ouraddress = String::new();
-//    let mut dstaddress = String::new();
-
-    for argument in env::args() {
-        if argument.starts_with("-uav=") {
-            uav.set_cli(&argument[5..]);
-        }
-        if argument.starts_with("-ufo=") {
-            ufo.set_cli(&argument[5..]);
-        }
-//        if argument.starts_with("-i=") {
-//            let fission: Vec<&str> = argument[3..].split(':').collect();
-
-//            ouraddress = "127.0.0.1".to_owned() + ":" + fission[0];
-
-//            if fission.len() == 2 || fission[2].is_empty() {
-//                dstaddress = "127.0.0.1".to_owned() + ":" + fission[1];
-//            }
-//            else {
-//                dstaddress = fission[2].to_owned() + ":" + fission[1];
-//            }
-//        }
-    }
-
-//    let socket: UdpSocket;
-//    match UdpSocket::bind(ouraddress) {
-//        Ok(nn) => socket = nn,
-//        Err(e) => {println!("Error: {}", e); return;},
-//    }
-
-    let one_second = time::Duration::new(1, 0);
-
-    let mut datastreamrequest   = mavlink::msg66::Message::new();
-    let mut status              = mavlink::msg203::Message::new();
-    let mut ownship             = mavlink::msg202::Message::new();
-    let mut trafficreport       = mavlink::msg246::Message::new();
-
-    trafficreport.icao = 0x00300100;
-
-    let uav_orig = uav.clone();
-
-    loop {
-        let start = time::Instant::now();
-
-        for msgid in [66, 203, 202, 246].iter() {
-//            match
-                match *msgid {
-                    66 =>  {
-                        mqtt.publish(datastreamrequest.serialise().message());
-                    },
-                    203 =>  {
-                        mqtt.publish(status.serialise().message());
-                    },
-                    202 =>  {
-                        mqtt.publish(ownship.set_candv(&uav).serialise().message());
-                    },
-                    246 =>  {
-                        mqtt.publish(trafficreport.set_candv(&ufo).serialise().message());
-                    },
-                    _  =>  {
-                        format!("WTF: msgid = {}", msgid);
-                    },
-                }
-//            {
-//                Ok(_) => (),
-//                Err(e) => {println!("Error: {}", e); return;},
-//            }
-        }
-
-        let mut lre = CwithV::new();
-        let mut avoid = false;
-
-        for mut mavmsg in channel.try_iter() {
-            println!("received message {} ({})", mavmsg[5], mavmsg[2]);
-
-            let mut settargetposition   = mavlink::msg84::Message::new();
-
-            settargetposition.unpack_payload(&mavmsg).unwrap(); // tut tut
-
-            lre.velocity(settargetposition.vx, settargetposition.vy, settargetposition.vz);
-            avoid = true;
-        }
-
-        if avoid {
-            uav.course(&lre);
-        }
-        else {
-            uav.course(&uav_orig);
-        }
-
-        uav.update();
-        ufo.update();
-
-        thread::sleep(one_second - start.elapsed());
-
-//        break;
-    }
-}
-
-fn inet_producer(_channel: &mpsc::Receiver<Vec<u8>>) -> () {
     let mut uav = CwithV::new();
     let mut ufo = CwithV::new();
 
@@ -198,58 +89,100 @@ fn inet_producer(_channel: &mpsc::Receiver<Vec<u8>>) -> () {
             else {
                 dstaddress = fission[2].to_owned() + ":" + fission[1];
             }
+
+            match UdpSocket::bind(ouraddress.clone()) {
+                Ok(socket) => inet = Some(socket),
+                Err(e) => panic!("Error: {}", e),
+            }
         }
     }
 
-    let socket: UdpSocket;
-    match UdpSocket::bind(ouraddress) {
-        Ok(nn) => socket = nn,
-        Err(e) => {println!("Error: {}", e); return;},
+    match inet {
+        Some(_) => println!("Socket {}", ouraddress),
+        None    => println!("Producer {}", mqtt.pubtopic),
     }
-
-    let one_second = time::Duration::new(1, 0);
 
     let mut datastreamrequest   = mavlink::msg66::Message::new();
     let mut status              = mavlink::msg203::Message::new();
     let mut ownship             = mavlink::msg202::Message::new();
     let mut trafficreport       = mavlink::msg246::Message::new();
 
-    trafficreport.icao = 0x00300100;
+    trafficreport.icao =
+        match inet {
+            Some(_) => 0x00300100,
+            None    => u32::from_str_radix(&mqtt.pubtopic[1..], 16).unwrap(),
+        };
+
+    println!("ICAO: {:08x}", trafficreport.icao);
+
+    let one_second = time::Duration::new(1, 0);
+
+    let uav_orig = uav.clone();
 
     loop {
         let start = time::Instant::now();
 
-        for msgid in [66, 203, 202, 246].iter() {
-            match
-                match *msgid {
-                    66 =>  {
-                        socket.send_to(datastreamrequest.serialise().message(), &dstaddress)
-                    },
-                    203 =>  {
-                        socket.send_to(status.serialise().message(), &dstaddress)
-                    },
-                    202 =>  {
-                        socket.send_to(ownship.set_candv(&uav).serialise().message(), &dstaddress)
-                    },
-                    246 =>  {
-                        socket.send_to(trafficreport.set_candv(&ufo).serialise().message(), &dstaddress)
-                    },
-                    _  =>  {
-                        Err(Error::new(ErrorKind::Other, format!("WTF: msgid = {}", msgid)))
-                    },
+        ufo.update_position();
+
+        for mut mavmsg in channel.try_iter() {
+            match mavmsg[5] {
+                84 => {
+                    let mut settargetposition = mavlink::msg84::Message::new();
+
+                    settargetposition.deserialise_message(&mavmsg);
+
+                    let mut lre = CwithV::new();
+                    lre.set_velocity(settargetposition.vx, settargetposition.vy, settargetposition.vz);
+                    uav.set_course(&lre);
                 }
-            {
-                Ok(_) => (),
-                Err(e) => {println!("Error: {}", e); return;},
+                202 => {
+                    let mut ownship = mavlink::msg202::Message::new();
+
+                    ownship.deserialise_message(&mavmsg);
+
+                    ownship.get_candv(&mut ufo);
+                }
+                _ => {
+                    println!("unexpected message {} ({})", mavmsg[5], mavmsg[2]);
+                }
             }
         }
 
-        uav.update();
-        ufo.update();
+        uav.update_position();
+
+        for msgid in [66, 203, 202, 246].iter() {
+            let message = match *msgid {
+                66 =>  {
+                    datastreamrequest.serialise().message()
+                },
+                203 =>  {
+                    status.serialise().message()
+                },
+                202 =>  {
+                    ownship.set_candv(&uav).serialise().message()
+                },
+                246 =>  {
+                    trafficreport.set_candv(&ufo).serialise().message()
+                },
+                _  =>  {
+                    panic!("WTF: msgid = {}", msgid);
+                },
+            };
+
+            match
+                match inet {
+                    Some(_) => inet.as_ref().unwrap().send_to(message, &dstaddress),
+                    None    => mqtt.publish(message, &format!("/{}", msgid)),
+                }
+            {
+                Ok(_) => (),
+                Err(e) => panic!("Error: {}", e),
+            };
+        }
+
+        uav.set_course(&uav_orig);
 
         thread::sleep(one_second - start.elapsed());
-
-//        break;
     }
 }
 

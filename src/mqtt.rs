@@ -4,6 +4,8 @@
 //
 extern crate mosquitto_client;
 
+use std::io::Error;
+
 use std::sync::mpsc;
 
 // ---------------------------------------------------------------------
@@ -102,20 +104,26 @@ impl Client {
         self
     }
 
-    pub fn publish(&mut self, payload: &[u8]) -> &mut Self {
-        match self.handle.publish(&self.pubtopic, payload, 0, false) {
-            Ok(_)  => (),
-            Err(e) => println!("MQTT publish error: {}", e),
-        }
+    pub fn publish(&mut self, payload: &[u8], tail: &str) -> Result<usize, Error> {
+        let mut fussy = self.pubtopic.clone();
+        fussy.push_str(tail);
 
-        self
+        match self.handle.publish(&fussy, payload, 0, false) {
+            Ok(_)  => (), // println!("MQTT publish successful"),
+            Err(e) => println!("MQTT publish error: {}", e),
+        };
+
+        Ok(0)
     }
 
     pub fn subscribe<F>(&mut self, channel: &mpsc::Sender<Vec<u8>>, callback: F) -> &mut Self
                 where F: Fn(&mpsc::Sender<Vec<u8>>, &[u8]) -> () {
-        match self.handle.subscribe(&self.subtopic, 1) {
-            Ok(_)  => println!("MQTT subscribe successful"),
-            Err(e) => println!("MQTT subscribe error: {}", e),
+
+        for topic in self.subtopic.split(';') {
+            match self.handle.subscribe(topic, 1) {
+                Ok(_)  => println!("MQTT subscribe successful {}", topic),
+                Err(e) => println!("MQTT subscribe error: {}", e),
+            }
         }
 
         {
