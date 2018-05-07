@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+
+<!--
+//! ADS-B Simulator - see README.md
+//
+// © NewForester, 2018.  Available under MIT licence terms.
+//
+-->
+
+<html lang="en-GB">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="description"    content="UI for ADS-B Simulations" />
+    <meta name="keywords"       content="ADB-B MQTT MAVLink OSM" />
+    <meta name="author"         content="NewForester" />
+    <meta name="viewport"       content="width=device-width, initial-scale=1.0" />
+
+    <style type="text/css">
+        html, body, #map {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #mqttParameters {
+            width: 25%;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: center;
+            }
+    </style>
+
+    <title>ADS-B Simulation</title>
+</head>
+
+<body>
+
+<div id="welcome">
+    <h1 style="text-align: center">A UI for the ADS-B Simulator</h1>
+
+    <h2 style="text-align: center">MQTT Parameters</h2>
+
+    <form id="mqttParameters" action="">
+        MQTT Server name:<br>
+        <input type="text" name="servername">
+        <br>
+        MQTT Server port:<br>
+        <input type="text" name="serverport">
+        <br>
+        MQTT Client Id:<br>
+        <input type="text" name="clientid">
+        <br>
+        UAV/UFO Topics:<br>
+        <input type="text" name="subtopics">
+        <br>
+        <br>
+        <br>
+        <input type="button" value="Accept Parameters and Show Simulation" onclick="onShowSimulation()">
+    </form>
+
+</div>
+
+<div id="map"></div>
+
+<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
+
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.2/mqttws31.min.js"></script>
+
+<script type="text/javascript" src="uav.js"></script>
+
+<script type="text/javascript" src="osm.js"></script>
+
+<script type="text/javascript" src="mavlink.js"></script>
+
+<script type="text/javascript" src="mqtt.js"></script>
+
+<script type="text/javascript" src="ui.js"></script>
+
+</body>
+</html>
+
+<!-- EOF -->
