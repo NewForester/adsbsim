@@ -1,7 +1,27 @@
-//! ADS-B Simulator - WIP
+//! ADS-B Simulator - see README.md
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
+//! The coords module stores the position and velocity of an aerial vehicle
+//! and provides a large number of getter and setter functions to handle
+//! conversion between internal and external co-ordinate systems safely.
+//!
+//! The internal representation is m and m/s so that `update_position()` is a
+//! simple addition (the ADS-B Simulator generates new positions once a second).
+//!
+//! Many of the getter/setter functions are provided for the convenience of
+//! `set_candv()` and `get_canv()` functions of MAVLink message modules.
+//!
+//! The `set_cli()` function provides the implementation of the parsing of
+//! certain command line parameters as described in README.md.
+//!
+//! The functions that do the real work are the setters:
+//!
+//!   * `set_position()`
+//!   * `set_velocity()`
+//!   * `set_course()`
+//!   * `update_position()`
+//!
 use std::str::FromStr;
 
 use std::f32;
@@ -112,18 +132,18 @@ impl CwithV {
         self
     }
 
-    pub fn update_position(&mut self) -> &mut Self {
-        self.latitude  += self.ns_velocity;
-        self.longitude += self.ew_velocity;
-        self.altitude  += self.ud_velocity;
-
-        self
-    }
-
     pub fn set_course(&mut self, new: &CwithV) -> &mut Self {
         self.ns_velocity = new.ns_velocity;
         self.ew_velocity = new.ew_velocity;
         self.ud_velocity = new.ud_velocity;
+
+        self
+    }
+
+    pub fn update_position(&mut self) -> &mut Self {
+        self.latitude  += self.ns_velocity;
+        self.longitude += self.ew_velocity;
+        self.altitude  += self.ud_velocity;
 
         self
     }
@@ -197,4 +217,3 @@ impl CwithV {
 }
 
 // EOF
-

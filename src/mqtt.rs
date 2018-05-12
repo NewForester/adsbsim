@@ -1,7 +1,16 @@
-//! ADS-B Simulator - WIP
+//! ADS-B Simulator - see README.md
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
+//! The mqtt module provides the ADS-B Simulator with a simple MQTT
+//! client that adheres to the 'necessary and sufficient' policy.
+//!
+//! The `set_cli()` function provides the implementation of the parsing of
+//! certain command line parameters as described in README.md.
+//!
+//! The `publish()` amd `subscribe()` functions implement the `/icaoAddr/msgId`
+//! MQTT topic namimg conventions.
+//!
 extern crate mosquitto_client;
 
 use std::io::Error;
@@ -77,6 +86,18 @@ impl Client {
         }
 
         self
+    }
+
+    pub fn get_202_subtopic(&self) -> &str {
+        for topic in self.subtopic.split(';') {
+            let bits: Vec<&str> = topic.split('/').collect();
+
+            if bits[bits.len() - 1] == "202" {
+                return bits[1]
+            }
+        }
+
+        &self.pubtopic[..]       // avoid embarassment
     }
 
     pub fn connect(&mut self) -> &mut Self {

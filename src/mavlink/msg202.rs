@@ -1,7 +1,23 @@
-//! ADS-B Simulator - WIP
+//! ADS-B Simulator - see README.md
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
+//! The msg202 module implements the _mavlink message trait_ for the
+//! MAVLink 'ownship' message (id 202).
+//!
+//! Both message serialise and deserialise are implemented.
+//!
+//! A number of setter/getter functions are implemented to support this.
+//! These convert between scaled integer and floating point representations.
+//! Their use is recommended.
+//!
+//! Although these functions are declared `pub`, the  ADS-B Simulator
+//! only uses `set_candv()` and  `get_candv()` 'publicly'.
+//!
+//! All message fields are `pub` so direct access is possible but check that
+//! such access is safe before doing so and considering implementing an
+//! appropriate getter/setter function.
+//!
 extern crate chrono;
 
 use self::chrono::Utc;
@@ -19,8 +35,10 @@ use mavlink::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
  * Avionix 202 'ownship' message (in)
  */
 
+const MSGLEN: usize = msglen!(42);
+
 pub struct Message {
-    buffy: Vec<u8>,
+    buffy: [u8; MSGLEN],
 
     pub utctime:    u32,
     pub latitude:   i32,
@@ -44,7 +62,7 @@ pub struct Message {
 impl Message {
     pub fn new() -> Message {
         Message {
-            buffy: Vec::new(),
+            buffy: [0; MSGLEN],
 
             utctime:    0,
             latitude:   0,
@@ -142,15 +160,7 @@ impl Message {
 impl mavlink::Message for Message {
     const MSGID: u8 = 202;
     const EXTRA: u8 = 0x07;
-    const PAYLEN: usize = 42;
-
-    fn serialise(&mut self) -> &mut Self {
-        self.utctime = Utc::now().timestamp() as u32;
-
-        self.buffy = Self::serialise_message(self);
-
-        self
-    }
+    const PAYLEN: usize = paylen!(MSGLEN);
 
     fn dump(&self) -> &Self {
         Self::dump_message (&self.buffy);
@@ -158,12 +168,12 @@ impl mavlink::Message for Message {
         self
     }
 
-    fn message(&self) -> &[u8] {
-        &self.buffy
+    fn message(&mut self) -> &mut [u8] {
+        &mut self.buffy
     }
 
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
-        buffy.write_u32::<LittleEndian>(self.utctime)?;
+        buffy.write_u32::<LittleEndian>(Utc::now().timestamp() as u32)?;
 
         buffy.write_i32::<LittleEndian>(self.latitude)?;
         buffy.write_i32::<LittleEndian>(self.longitude)?;
@@ -180,6 +190,7 @@ impl mavlink::Message for Message {
 
         buffy.write_u16::<LittleEndian>(self.state)?;
         buffy.write_u16::<LittleEndian>(self.squawk)?;
+
         buffy.write_u8(self.fixtype)?;
         buffy.write_u8(self.numsats)?;
         buffy.write_u8(self.emstatus)?;
@@ -188,7 +199,9 @@ impl mavlink::Message for Message {
         Ok(())
     }
 
-    fn unpack_payload(&mut self, mut payload: &[u8]) -> Result<(),Error> {
+    fn unpack_payload(&mut self) -> Result<(),Error> {
+        let mut payload = &self.buffy[mavlink::PAYLOAD..];
+
         self.utctime = payload.read_u32::<LittleEndian>()?;
 
         self.latitude = payload.read_i32::<LittleEndian>()?;
@@ -206,6 +219,7 @@ impl mavlink::Message for Message {
 
         self.state = payload.read_u16::<LittleEndian>()?;
         self.squawk = payload.read_u16::<LittleEndian>()?;
+
         self.fixtype = payload.read_u8()?;
         self.numsats = payload.read_u8()?;
         self.emstatus = payload.read_u8()?;

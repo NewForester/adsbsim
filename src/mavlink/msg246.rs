@@ -1,7 +1,23 @@
-//! ADS-B Simulator - WIP
+//! ADS-B Simulator - see README.md
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
+//! The msg246 module implements the _mavlink message trait_ for the
+//! MAVLink 'traffic report' message (id 246).
+//!
+//! Only message serialise is actually implemented
+//! as the ADS-B Simulator need only generate this message.
+//!
+//! A number of setter functions are implemented to support this.
+//! Setting message fields without using these functions is not recommended.
+//!
+//! Although these functions are all declared `pub`,
+//! the  ADS-B Simulator uses only `set_candv()` 'publicly'.
+//!
+//! All message fields are `pub` so direct access is possible but check that
+//! such access is safe before doing so and considering implementing an
+//! appropriate getter/setter function.
+//!
 use std::io::{Write, Error, ErrorKind};
 
 use ::coords::CwithV;
@@ -15,8 +31,10 @@ use mavlink::byteorder::{LittleEndian, WriteBytesExt};
  * Avionix 246 'traffic report' message (in)
  */
 
+const MSGLEN: usize = msglen!(38);
+
 pub struct Message {
-    buffy: Vec<u8>,
+    buffy: [u8; MSGLEN],
 
     pub icao:           u32,
     pub lat:            i32,
@@ -49,7 +67,7 @@ enum VF {
 impl Message {
     pub fn new() -> Message {
         let mut safe = Message {
-            buffy: Vec::new(),
+            buffy: [0; MSGLEN],
 
             icao:           0,
             lat:            0,
@@ -138,13 +156,7 @@ impl Message {
 impl mavlink::Message for Message {
     const MSGID: u8 = 246;
     const EXTRA: u8 = 0xb8;
-    const PAYLEN: usize = 38;
-
-    fn serialise(&mut self) -> &mut Self {
-        self.buffy = Self::serialise_message(self);
-
-        self
-    }
+    const PAYLEN: usize = paylen!(MSGLEN);
 
     fn dump(&self) -> &Self {
         Self::dump_message (&self.buffy);
@@ -152,8 +164,8 @@ impl mavlink::Message for Message {
         self
     }
 
-    fn message(&self) -> &[u8] {
-        &self.buffy
+    fn message(&mut self) -> &mut [u8] {
+        &mut self.buffy
     }
 
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
@@ -178,7 +190,7 @@ impl mavlink::Message for Message {
         Ok(())
     }
 
-    fn unpack_payload(&mut self, mut _payload: &[u8]) -> Result<(),Error> {
+    fn unpack_payload(&mut self) -> Result<(),Error> {
        Err(Error::new(ErrorKind::Other, "Not implemented"))
     }
 }

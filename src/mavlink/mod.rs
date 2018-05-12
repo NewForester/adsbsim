@@ -1,23 +1,47 @@
-//! ADS-B Simulator - WIP
+//! ADS-B Simulator - see README.md
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
+//! The mavlink module declares a trait to ensure MAVLink messages are handled
+//! consistently and provide DRY code as appropriate.
+//!
+//! The two most important traits are:
+//!
+//!  * serialise - message payload ready for transmission
+//!  * deserialise - on arrival so message payload is available for processing
+//!
+//! Message specific packing/unpacking is delegated to modules implementing
+//! these traits.
+//!
 extern crate byteorder;
 extern crate crc16;
-
-pub mod msg66;
-pub mod msg84;
-pub mod msg202;
-pub mod msg203;
-pub mod msg246;
 
 use std::io::Error;
 
 use self::byteorder::{LittleEndian, WriteBytesExt};
 
-static mut SEQNO_OUT: u8 = 0;
+use mavlink;
 
-const SHUTUP: usize = 256;
+const HDR_SIZE: usize = 6;
+const CRC_SIZE: usize = 2;
+
+#[macro_export]
+macro_rules! msglen {
+    ($paylen:expr) => (
+        $paylen + mavlink::HDR_SIZE + mavlink::CRC_SIZE
+    )
+}
+
+#[macro_export]
+macro_rules! paylen {
+    ($msglen:expr) => (
+        $msglen - mavlink::HDR_SIZE - mavlink::CRC_SIZE
+    )
+}
+
+const PAYLOAD: usize = HDR_SIZE;
+
+static mut SEQNO_OUT: u8 = 0;
 
 struct Header {
     pub mavstx:     u8,
@@ -33,11 +57,9 @@ pub trait Message {
     const EXTRA: u8;
     const PAYLEN: usize;
 
-    fn serialise(&mut self) -> &mut Self;
-
     fn dump(&self) -> &Self;
 
-    fn message(&self) -> &[u8];
+    fn message(&mut self) -> &mut [u8];
 
     fn dump_message(message: &[u8]) -> () {
         print!("Dump message {:3}:", Self::MSGID);
@@ -47,31 +69,41 @@ pub trait Message {
         println!();
     }
 
-    fn serialise_message(&self) -> Vec<u8> {
-
-        let mut buffy: Vec<u8> = Vec::with_capacity(6 + 256 + 2);
+    fn serialise(&mut self) -> &[u8] {
+        let mut buffy: Vec<u8> = Vec::with_capacity(msglen!(Self::PAYLEN));
 
         match Self::pack_message(self, &mut buffy) {
             Ok(_)  => {
-                ();
+                let message = self.message();
+
+                for ii in 0 .. msglen!(Self::PAYLEN) {
+                    message[ii] = buffy[ii];
+                }
             }
             Err(_) => {
                 println!("Serialisation of message {} failed", Self::MSGID);
-                buffy.clear();
+
+                let message = self.message();
+
+                for ii in 0 .. msglen!(Self::PAYLEN) {
+                    message[ii] = 0;
+                }
             }
         }
 
-        buffy
+        self.message()
     }
 
-    fn deserialise_message(&mut self, buffy: &Vec<u8>) -> &mut Self {
-        let mut known_size: [u8; SHUTUP] = [0; SHUTUP];
+    fn deserialise(&mut self, buffy: &Vec<u8>) -> &mut Self {
+        {
+            let message = self.message();
 
-        for ii in 0 .. Self::PAYLEN {
-            known_size[ii] = buffy[6 + ii];
+            for ii in 0 .. msglen!(Self::PAYLEN) {
+                message[ii] = buffy[ii];
+            }
         }
 
-        match self.unpack_payload(&known_size[ .. ]) {
+        match self.unpack_message() {
             Ok(_)  => {
                 ();
             }
@@ -83,7 +115,7 @@ pub trait Message {
         self
     }
 
-    fn pack_message(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
+    fn pack_message(&mut self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         Self::pack_header(buffy)?;
 
         self.pack_payload(buffy)?;
@@ -105,12 +137,12 @@ pub trait Message {
 
         unsafe {header.seqno = SEQNO_OUT;}
 
-        buffy.push(header.mavstx);
-        buffy.push(header.paylen);
-        buffy.push(header.seqno);
-        buffy.push(header.sysid);
-        buffy.push(header.compid);
-        buffy.push(header.msgid);
+        buffy.write_u8(header.mavstx)?;
+        buffy.write_u8(header.paylen)?;
+        buffy.write_u8(header.seqno)?;
+        buffy.write_u8(header.sysid)?;
+        buffy.write_u8(header.compid)?;
+        buffy.write_u8(header.msgid)?;
 
         unsafe {SEQNO_OUT = SEQNO_OUT.wrapping_add(1);}
 
@@ -130,7 +162,23 @@ pub trait Message {
         Ok(())
     }
 
-    fn unpack_payload(&mut self, payload: &[u8]) -> Result<(),Error>;
+    fn unpack_message(&mut self) -> Result<(),Error> {
+//        Self::unpack_crc(self.message())?;
+
+//        Self::unpack_header(self.message())?;
+
+        self.unpack_payload()?;
+
+        Ok(())
+    }
+
+    fn unpack_payload(&mut self) -> Result<(),Error>;
 }
+
+pub mod msg66;
+pub mod msg84;
+pub mod msg202;
+pub mod msg203;
+pub mod msg246;
 
 // EOF
