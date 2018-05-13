@@ -16,14 +16,14 @@ use std::io::{Error};
 use mavlink;
 use mavlink::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
-/*
- * Avionix 84 'set position target local ned' message (in)
- */
-
+/// The length of MAVLink 86 messages in bytes
 const MSGLEN: usize = msglen!(53);
 
+// ---------------------------------------------------------------------------
+
+/// The MAVLink 86 message structure
 pub struct Message {
     buffy: [u8; MSGLEN],
 
@@ -45,7 +45,11 @@ pub struct Message {
     pub yaw_rate:           f32,
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of methods for the MAVLink 84 message type
 impl Message {
+    // new() creates and initialises a MAVLink 84 message structure
     pub fn new() -> Message {
         let safe = Message {
             buffy: [0; MSGLEN],
@@ -72,21 +76,20 @@ impl Message {
     }
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of the MAVLink message traits for the 84 message type
 impl mavlink::Message for Message {
     const MSGID: u8 = 246;
     const EXTRA: u8 = 0xb8;
     const PAYLEN: usize = paylen!(MSGLEN);
 
-    fn dump(&self) -> &Self {
-        Self::dump_message (&self.buffy);
-
-        self
-    }
-
+    // message() returns the message byte array (for trait use only)
     fn message(&mut self) -> &mut [u8] {
         &mut self.buffy
     }
 
+    // pack_payload() implements the MAVLink message serialise() trait
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         buffy.write_u32::<LittleEndian>(self.time_boot_ms)?;
 
@@ -114,6 +117,7 @@ impl mavlink::Message for Message {
         Ok(())
     }
 
+    // unpack_payload() implements the MAVLink message deserialise() trait
     fn unpack_payload(&mut self) -> Result<(),Error> {
         let mut payload = &self.buffy[mavlink::PAYLOAD..];
 

@@ -16,19 +16,23 @@ use std::io::{Error, ErrorKind};
 use mavlink;
 use mavlink::byteorder::{WriteBytesExt};
 
-// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
-/*
- * MAVLink 66 'datastream request' message (obsolete but still comes in)
- */
-
+/// The length of MAVLink 66 messages in bytes
 const MSGLEN: usize = msglen!(6);
 
+// ---------------------------------------------------------------------------
+
+/// The MAVLink 66 message structure
 pub struct Message {
     buffy: [u8; MSGLEN],
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of methods for the MAVLink 66 message type
 impl Message {
+    // new() creates and initialises a MAVLink 66 message structure
     pub fn new() -> Message {
         Message {
             buffy: [0; MSGLEN],
@@ -36,21 +40,20 @@ impl Message {
     }
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of the MAVLink message traits for the 66 message type
 impl mavlink::Message for Message {
     const MSGID: u8 = 66;
     const EXTRA: u8 = 0x94;
     const PAYLEN: usize = paylen!(MSGLEN);
 
-    fn dump(&self) -> &Self {
-        Self::dump_message (&self.buffy);
-
-        self
-    }
-
+    // message() returns the message byte array (for trait use only)
     fn message(&mut self) -> &mut [u8] {
         &mut self.buffy
     }
 
+    // pack_payload() implements the MAVLink message serialise() trait
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         for _ii in 0..MSGLEN {
             buffy.write_u8(0)?;
@@ -59,6 +62,7 @@ impl mavlink::Message for Message {
         Ok(())
     }
 
+    // unpack_payload() implements the MAVLink message deserialise() trait
     fn unpack_payload(&mut self) -> Result<(),Error> {
         Err(Error::new(ErrorKind::Other, "Not implemented"))
     }

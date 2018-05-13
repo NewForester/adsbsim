@@ -2,7 +2,7 @@
 //
 // © NewForester, 2018.  Available under MIT licence terms.
 //
-//! The coords module stores the position and velocity of an aerial vehicle
+//! The coords module holds the position and velocity of an aerial vehicle
 //! and provides a large number of getter and setter functions to handle
 //! conversion between internal and external co-ordinate systems safely.
 //!
@@ -10,7 +10,7 @@
 //! simple addition (the ADS-B Simulator generates new positions once a second).
 //!
 //! Many of the getter/setter functions are provided for the convenience of
-//! `set_candv()` and `get_canv()` functions of MAVLink message modules.
+//! `set_candv()` and `get_cwithv()` functions of MAVLink message modules.
 //!
 //! The `set_cli()` function provides the implementation of the parsing of
 //! certain command line parameters as described in README.md.
@@ -26,13 +26,10 @@ use std::str::FromStr;
 
 use std::f32;
 
-// ---------------------------------------------------------------------
-
-/*
- * Position and velocity of a UAV or UFO
- */
+// ---------------------------------------------------------------------------
 
 #[derive(Clone)]
+/// The CwithV structure holds the position and velocity of a aerial vehicle
 pub struct CwithV {
     latitude:       f32,
     longitude:      f32,
@@ -43,7 +40,11 @@ pub struct CwithV {
     ew_velocity:    f32,
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of methods for the CwithV type
 impl CwithV {
+    // new() creates and initialises a CwithV structure
     pub fn new() -> CwithV {
         CwithV {
             latitude:       0.0,
@@ -72,6 +73,7 @@ impl CwithV {
     const HOME_LONG: f32 = -2.05134590;
     const HOME_ALT: f32 = 128.0;
 
+    // set_cli() (re)initialises a CwithV structure from a CLI parameter string
     pub fn set_cli(&mut self, cli: &str) -> &mut Self {
         let fission: Vec<&str> = cli.split(',').collect();
 
@@ -116,6 +118,7 @@ impl CwithV {
         self
     }
 
+    // set_position() sets the 3D Cartesian position in m (converting latitude and longitude from degrees to m)
     pub fn set_position(&mut self, x: f32, y: f32, z: f32) -> &mut Self {
         self.latitude   = Self::get_latitude_m(x);
         self.longitude  = Self::get_longitude_m(y);
@@ -124,6 +127,7 @@ impl CwithV {
         self
     }
 
+    // set_velocity() sets the 3D Cartesian velocity in m/s
     pub fn set_velocity(&mut self, vx: f32, vy: f32, vz: f32) -> &mut Self {
         self.ns_velocity = vx;
         self.ew_velocity = vy;
@@ -132,6 +136,7 @@ impl CwithV {
         self
     }
 
+    // set_course() sets the 3D Cartesian velocity in m/s to that of another CwithV structure
     pub fn set_course(&mut self, new: &CwithV) -> &mut Self {
         self.ns_velocity = new.ns_velocity;
         self.ew_velocity = new.ew_velocity;
@@ -140,6 +145,7 @@ impl CwithV {
         self
     }
 
+    // update_position() increments the 3D position by the 3D velocity
     pub fn update_position(&mut self) -> &mut Self {
         self.latitude  += self.ns_velocity;
         self.longitude += self.ew_velocity;
@@ -148,27 +154,33 @@ impl CwithV {
         self
     }
 
+    // get_latitude() returns the latitude in degrees
     pub fn get_latitude(&self) -> f32 {
         Self::get_latitude_degrees(self.latitude)
     }
+    // get_longitude() returns the longitude in degrees
     pub fn get_longitude(&self) -> f32 {
         Self::get_longitude_degrees(self.longitude)
     }
+    // get_altitude() returns the GPS altitude in m
     pub fn get_altitude(&self) -> f32 {
         self.altitude
     }
 
+    // get_rateofclimb() returns the 'vertical' velocity in m/s
     pub fn get_rateofclimb(&self) -> f32 {
         self.ud_velocity
     }
-
+    // get_ns_velocity() returns the 'horizontal' north/south in m/s
     pub fn get_ns_velocity(&self) -> f32 {
         self.ns_velocity
     }
+    // get_ew_velocity() returns the 'horizontal' east/west in m/s
     pub fn get_ew_velocity(&self) -> f32 {
         self.ew_velocity
     }
 
+    // get_heading() returns the over-the-ground heading in degrees from north
     pub fn get_heading(&self) -> f32 {
         let mut heading: f64;
 
@@ -191,6 +203,7 @@ impl CwithV {
 
         heading as f32
     }
+    // get_groundspeed() returns the over-the-ground speed in m/s (never negative)
     pub fn get_groundspeed(&self) -> f32 {
         let ew_velocity = self.ew_velocity as f64;
         let ns_velocity = self.ns_velocity as f64;

@@ -7,7 +7,7 @@
 //!
 //! The two most important traits are:
 //!
-//!  * serialise - message payload ready for transmission
+//!  * serialise - message ready for transmission
 //!  * deserialise - on arrival so message payload is available for processing
 //!
 //! Message specific packing/unpacking is delegated to modules implementing
@@ -22,10 +22,10 @@ use self::byteorder::{LittleEndian, WriteBytesExt};
 
 use mavlink;
 
-const HDR_SIZE: usize = 6;
-const CRC_SIZE: usize = 2;
+// ---------------------------------------------------------------------------
 
 #[macro_export]
+/// msglen!() returns a MAVLink message length given its payload length
 macro_rules! msglen {
     ($paylen:expr) => (
         $paylen + mavlink::HDR_SIZE + mavlink::CRC_SIZE
@@ -33,16 +33,30 @@ macro_rules! msglen {
 }
 
 #[macro_export]
+// paylen!() returns the payload length given a MAVLink message length
 macro_rules! paylen {
     ($msglen:expr) => (
         $msglen - mavlink::HDR_SIZE - mavlink::CRC_SIZE
     )
 }
 
-const PAYLOAD: usize = HDR_SIZE;
+// ---------------------------------------------------------------------------
 
+/// The sizes, in bytes. of the MAVLink message header and checksum, respectively
+const HDR_SIZE: usize = 6;
+const CRC_SIZE: usize = 2;
+
+/// The offset of the payload within a MAVLink message
+const PAYLOAD:  usize = HDR_SIZE;
+
+// ---------------------------------------------------------------------------
+
+/// The unique sequence number used in the header of all published messages
 static mut SEQNO_OUT: u8 = 0;
 
+// ---------------------------------------------------------------------------
+
+/// The MAVLink message header structure
 struct Header {
     pub mavstx:     u8,
     pub paylen:     u8,
@@ -52,23 +66,29 @@ struct Header {
     pub msgid:      u8,
 }
 
+// ---------------------------------------------------------------------------
+
+/// The definition and partial implementation of the MAVLink message traits
 pub trait Message {
     const MSGID: u8;
     const EXTRA: u8;
     const PAYLEN: usize;
 
-    fn dump(&self) -> &Self;
-
-    fn message(&mut self) -> &mut [u8];
-
-    fn dump_message(message: &[u8]) -> () {
+    // dump() prints the message byte array (for debugging use only)
+    fn dump(&mut self) -> &Self {
         print!("Dump message {:3}:", Self::MSGID);
-        for ii in message {
+        for ii in self.message() {
             print!(" {:02x}", ii);
         }
         println!();
+
+        self
     }
 
+    // message() returns the message byte array (for internal use only)
+    fn message(&mut self) -> &mut [u8];
+
+    // the serialise() trait converts a MAVLink message type into a byte array
     fn serialise(&mut self) -> &[u8] {
         let mut buffy: Vec<u8> = Vec::with_capacity(msglen!(Self::PAYLEN));
 
@@ -94,6 +114,7 @@ pub trait Message {
         self.message()
     }
 
+    // the deserialise() trait converts a byte array into a MAVLink message type
     fn deserialise(&mut self, buffy: &Vec<u8>) -> &mut Self {
         {
             let message = self.message();
@@ -115,6 +136,7 @@ pub trait Message {
         self
     }
 
+    // pack_message() implements the MAVLink message serialise() trait
     fn pack_message(&mut self, buffy: &mut Vec<u8>) -> Result<(),Error> {
         Self::pack_header(buffy)?;
 
@@ -125,6 +147,7 @@ pub trait Message {
         Ok(())
     }
 
+    // pack_header() serialises the MAVLink message header
     fn pack_header(buffy: &mut Vec<u8>) -> Result<(),Error> {
         let mut header = Header {
             mavstx:     0xfe,
@@ -149,8 +172,10 @@ pub trait Message {
         Ok(())
     }
 
+    // pack_payload() serialises a MAVLink message payload
     fn pack_payload(&self, buffy: &mut Vec<u8>) -> Result<(),Error>;
 
+    // pack_header() calculates and serialises the MAVLink message checksum
     fn pack_crc(buffy: &mut Vec<u8>) -> Result<(),Error> {
         let mut crc = crc16::State::<crc16::MCRF4XX>::new();
 
@@ -162,6 +187,7 @@ pub trait Message {
         Ok(())
     }
 
+    // unpack_payload() implements the MAVLink message deserialise() trait
     fn unpack_message(&mut self) -> Result<(),Error> {
 //        Self::unpack_crc(self.message())?;
 
@@ -172,9 +198,13 @@ pub trait Message {
         Ok(())
     }
 
+    // unpack_payload() deserialises a MAVLink message payload
     fn unpack_payload(&mut self) -> Result<(),Error>;
 }
 
+// ---------------------------------------------------------------------------
+
+// MAVLink message implementations
 pub mod msg66;
 pub mod msg84;
 pub mod msg202;

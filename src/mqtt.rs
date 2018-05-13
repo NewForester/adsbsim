@@ -8,8 +8,14 @@
 //! The `set_cli()` function provides the implementation of the parsing of
 //! certain command line parameters as described in README.md.
 //!
-//! The `publish()` amd `subscribe()` functions implement the `/icaoAddr/msgId`
+//! The `publish()` and `subscribe()` functions implement the `/icaoAddr/msgId`
 //! MQTT topic namimg conventions.
+//!
+//! Concurrency-wise, the main routine creates a separate thread that handles
+//! the publication of all messages and calls the `subscribe()` function below.
+//! The `subscribe()` function, I believe creates a thread context to handle
+//! callback when messages are received.  I believe there is one such thread
+//! per subscription.
 //!
 extern crate mosquitto_client;
 
@@ -17,13 +23,10 @@ use std::io::Error;
 
 use std::sync::mpsc;
 
-// ---------------------------------------------------------------------
-
-/*
- * Simple MQTT client implementation
- */
+// ---------------------------------------------------------------------------
 
 #[derive(Clone)]
+/// The Client structure holds an MQTT client handle and its parameters
 pub struct Client {
     clientid:   String,
     host:       String,
@@ -35,7 +38,11 @@ pub struct Client {
     handle:     mosquitto_client::Mosquitto,
 }
 
+// ---------------------------------------------------------------------------
+
+/// The implementation of methods for the Client type
 impl Client {
+    // new() creates and initialises a Client structure
     pub fn new() -> Client {
         Client {
             clientid:   String::new(),
@@ -48,6 +55,7 @@ impl Client {
     }
 
     #[allow(dead_code)]
+    // dump() prints the MQTT parameters (for debug only)
     pub fn dump(&self) -> &Self {
         println!("clientid: {}", self.clientid);
         println!("host:     {}", self.host);
@@ -58,6 +66,7 @@ impl Client {
         self
     }
 
+    // set_cli() extract MQTT parameters from a CLI parameter string
     pub fn set_cli(&mut self, cli: &str) -> &mut Self {
         let fission: Vec<&str> = cli.split(',').collect();
 
@@ -88,6 +97,7 @@ impl Client {
         self
     }
 
+    // get_202_subtopic() extract the subscription topic for MAVLink 202 messages
     pub fn get_202_subtopic(&self) -> &str {
         for topic in self.subtopic.split(';') {
             let bits: Vec<&str> = topic.split('/').collect();
@@ -100,6 +110,7 @@ impl Client {
         &self.pubtopic[..]       // avoid embarassment
     }
 
+    // connect() connects to the MQTT broker
     pub fn connect(&mut self) -> &mut Self {
         self.handle = mosquitto_client::Mosquitto::new(&self.clientid);
 
@@ -111,6 +122,7 @@ impl Client {
         self
     }
 
+    // disconnect() waits until the MQTT broker disconnects (never does)
     pub fn disconnect(&mut self) -> &mut Self {
         match self.handle.loop_until_disconnect(-1) {
             Ok(_)  => println!("MQTT wait for disconnect successful"),
@@ -125,6 +137,7 @@ impl Client {
         self
     }
 
+    // publish() publishes a message to an MQTT broker subtopic
     pub fn publish(&mut self, payload: &[u8], tail: &str) -> Result<usize, Error> {
         let mut fussy = self.pubtopic.clone();
         fussy.push_str(tail);
@@ -137,6 +150,7 @@ impl Client {
         Ok(0)
     }
 
+    // subsccribe() subscribes to a list MQTT broker topics and/or subtopics
     pub fn subscribe<F>(&mut self, channel: &mpsc::Sender<Vec<u8>>, callback: F) -> &mut Self
                 where F: Fn(&mpsc::Sender<Vec<u8>>, &[u8]) -> () {
 
