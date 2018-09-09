@@ -14,8 +14,8 @@
 var servername = "127.0.0.1";
 var serverport = "9001";
 var clientid = "AdsbSimViewer";
-var subtopics = "/300159/#";
-//var subtopics = "/300159/202;/151060/202";
+//var subtopics = "/300159/#";
+var subtopics = "/300159/202;/151060/202";
 
 // setParameters() copies the application's parameters to the DOM for display
 function setParameters() {
