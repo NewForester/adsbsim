@@ -141,6 +141,8 @@ fn producer(channel: &mpsc::Receiver<Vec<u8>>, mqtt: &mut mqtt::Client) -> () {
                 84 => {
                     let mut settargetposition = mavlink::msg84::Message::new();
 
+                    println!("received 84 message");
+
                     settargetposition.deserialise(&mavmsg);
 
                     uav.set_velocity(settargetposition.vx, settargetposition.vy, settargetposition.vz);
@@ -151,6 +153,9 @@ fn producer(channel: &mpsc::Receiver<Vec<u8>>, mqtt: &mut mqtt::Client) -> () {
                     ownship.deserialise(&mavmsg);
 
                     ownship.get_cwithv(&mut ufo);
+                    if ! ufoinitialised {
+                        println!("received first 202 message");
+                    }
                     ufoinitialised = true;
                 }
                 _ => {
