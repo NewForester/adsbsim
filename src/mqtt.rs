@@ -112,11 +112,16 @@ impl Client {
 
     // connect() connects to the MQTT broker
     pub fn connect(&mut self) -> &mut Self {
-        self.handle = mosquitto_client::Mosquitto::new(&self.clientid);
+        self.handle = mosquitto_client::Mosquitto::new_session(&self.clientid, false);
 
         match self.handle.connect(&self.host, self.port) {
             Ok(_)  => println!("MQTT connection successful"),
             Err(e) => println!("MQTT connection error: {}", e),
+        }
+
+        match self.handle.reconnect_delay_set(0, 0, false) {
+            Ok(_)  => println!("MQTT set delay successful"),
+            Err(e) => println!("MQTT set delay error: {}", e),
         }
 
         self
@@ -150,7 +155,7 @@ impl Client {
         Ok(0)
     }
 
-    // subsccribe() subscribes to a list MQTT broker topics and/or subtopics
+    // subscribe() subscribes to a list MQTT broker topics and/or subtopics
     pub fn subscribe<F>(&mut self, channel: &mpsc::Sender<Vec<u8>>, callback: F) -> &mut Self
                 where F: Fn(&mpsc::Sender<Vec<u8>>, &[u8]) -> () {
 
